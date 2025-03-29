@@ -2,12 +2,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const settings = await chrome.storage.sync.get([
       'apiBackend', 
       'apiKey',
-      'debugMode'
+      'debugMode',
+      'autoClean'
     ]);
     
     document.getElementById('apiBackend').value = settings.apiBackend || 'simple';
     document.getElementById('apiKey').value = settings.apiKey || '';
     document.getElementById('debugToggle').checked = settings.debugMode || false;
+    document.getElementById('autoClean').checked = settings.autoClean || false;
   
     // Скрываем поле API ключа в простом режиме
     document.getElementById('apiBackend').addEventListener('change', function() {
@@ -22,20 +24,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     await chrome.storage.sync.set({
       apiBackend: document.getElementById('apiBackend').value,
       apiKey: document.getElementById('apiKey').value,
-      debugMode: document.getElementById('debugToggle').checked
+      debugMode: document.getElementById('debugToggle').checked,
+      autoClean: document.getElementById('autoClean').checked
     });
   };
   
   document.getElementById('apiBackend').addEventListener('change', saveSettings);
   document.getElementById('apiKey').addEventListener('input', saveSettings);
   document.getElementById('debugToggle').addEventListener('change', saveSettings);
+  document.getElementById('autoClean').addEventListener('change', saveSettings);
   
   document.getElementById('rewriteBtn').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     const { apiBackend, apiKey, debugMode } = await chrome.storage.sync.get([
       'apiBackend', 
       'apiKey',
-      'debugMode'
+      'debugMode',
+      'autoClean'
     ]);
   
     const statusEl = document.getElementById('status');
