@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      width: 340px;
+      padding: 15px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #333;
+    }
+    .config-section {
+      margin-bottom: 15px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px;
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+    select, input[type="password"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 5px;
+    }
+    .debug-toggle {
+      margin-top: 15px;
+      display: flex;
+      align-items: center;
+    }
+    .debug-toggle input {
+      width: auto;
+      margin-right: 8px;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h3 style="margin-top: 0; color: #4285f4;">YouTube Description Cleaner</h3>
+  
+  <div class="config-section">
+    <div class="form-group">
+      <label for="apiBackend">Processing Mode:</label>
+      <select id="apiBackend">
+        <option value="simple">Simple (first paragraph only)</option>
+        <option value="gemini">Google Gemini (AI)</option>
+        <option value="chatgpt">OpenAI ChatGPT (AI)</option>
+      </select>
+    </div>
+
+    <div class="form-group" id="apiKeyGroup">
+      <label for="apiKey">API Key (for AI modes):</label>
+      <input type="password" id="apiKey" placeholder="Enter API key for AI modes">
+    </div>
+
+    <div class="debug-toggle">
+      <input type="checkbox" id="debugToggle">
+      <label for="debugToggle" style="font-weight:normal;">Debug mode</label>
+    </div>
+  </div>
+
+  <button id="rewriteBtn">Clean Description</button>
+  <div id="status"></div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
