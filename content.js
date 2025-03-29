@@ -2,28 +2,49 @@ const globalState = {
   originalDescription: '',
   originalHTML: '',
   originalElement: null,
-  isRewritten: false
+  isRewritten: false,
+  debugMode: false // Added debugMode to global state
 };
+
+// Debug logger function
+function debugLog(...args) {
+  if (globalState.debugMode) {
+    console.log('[DEBUG]', new Date().toISOString(), ...args);
+  }
+}
 
 // Finds the description element on the page. It attempts to locate the expanded description first,
 // then the collapsed version, and finally falls back to other potential description containers.
 function findDescriptionElement() {
-  const collapsed = document.querySelector(
-    '#attributed-snippet-text > .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
-  );
-  if (collapsed) return { element: collapsed, isShortened: true };
-
+  debugLog('Attempting to find description element...');
+  
   const expanded = document.querySelector(
     '#description-inline-expander yt-attributed-string.ytd-text-inline-expander.style-scope ' +
     '> .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
   );
-  if (expanded) return { element: expanded, isShortened: false };
+  if (expanded) {
+    debugLog('Found expanded description element:', expanded);
+    return { element: expanded, isShortened: false };
+  }
 
-  return {
-    element: document.querySelector("#description-inline-expander") ||
-      document.querySelector("#description.ytd-video-secondary-info-renderer") ||
-      document.querySelector("yt-formatted-string#content"), isShortened: /* unknown */ false
-  };
+  const collapsed = document.querySelector(
+    '#attributed-snippet-text > .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
+  );
+  if (collapsed) {
+    debugLog('Found collapsed description element:', collapsed);
+    return { element: collapsed, isShortened: true };
+  }
+
+  const fallback = document.querySelector("#description-inline-expander") ||
+    document.querySelector("#description.ytd-video-secondary-info-renderer") ||
+    document.querySelector("yt-formatted-string#content");
+  if (fallback) {
+    debugLog('Found fallback description element:', fallback);
+  } else {
+    debugLog('No description element found.');
+  }
+
+  return { element: fallback, isShortened: /* unknown */ false };
 }
 
 // Adds a "Restore original" button next to the modified description element. This button allows
@@ -48,7 +69,7 @@ function addRestoreButton(element) {
   revertButton.querySelector('span').addEventListener('click', () => {
     element.innerHTML = globalState.originalHTML;
     revertButton.remove();
-    isRewritten = false;
+    globalState.isRewritten = false;
   });
 
   element.parentElement.insertBefore(revertButton, element.nextSibling);
@@ -86,7 +107,13 @@ function changeDescriptionToRewritten(request, sendResponse) {
 // Listens for messages from the extension's background script or popup. Handles actions to either
 // retrieve the current description or update it with new content.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.debug) console.log("[DEBUG] Message received:", request.action);
+  if (request.debug !== undefined) {
+    globalState.debugMode = request.debug; // Update debugMode based on the request
+  }
+
+  if (globalState.debugMode) {
+    console.log("[DEBUG] Message received:", request.action, request);
+  }
 
   if (request.action === "getDescriptionForRewrite") {
     getDescriptionForRewrite(sendResponse);
