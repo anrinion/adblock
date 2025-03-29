@@ -38,54 +38,120 @@ chrome.storage.onChanged.addListener((changes) => {
   }
 });
 
+// Cache to store processed requests per tabId
+const requestCache = new Map();
+
+// Check and update the cache with a boolean key indicating shortened or expanded state
+function isRequestCached(tabId, url, isShortened) {
+  if (!requestCache.has(tabId)) {
+    requestCache.set(tabId, new Map());
+  }
+  const tabCache = requestCache.get(tabId);
+  if (!tabCache.has(url)) {
+    tabCache.set(url, { shortened: false, expanded: false });
+  }
+  const urlCache = tabCache.get(url);
+  const key = isShortened ? 'shortened' : 'expanded';
+  if (urlCache[key]) {
+    debugLog('Request already cached for tab:', tabId, 'URL:', url, 'Key:', key);
+    return true;
+  }
+  urlCache[key] = true;
+  return false;
+}
+
+// Store original and rewritten text in the cache with a key for shortened or expanded state
+function cacheRequestData(tabId, url, isShortened, originalText, rewrittenText) {
+  if (requestCache.has(tabId)) {
+    const tabCache = requestCache.get(tabId);
+    if (tabCache.has(url)) {
+      const urlCache = tabCache.get(url);
+      const key = isShortened ? 'shortened' : 'expanded';
+      urlCache[key] = { originalText, rewrittenText };
+      debugLog('Cached data for tab:', tabId, 'URL:', url, 'Key:', key);
+    }
+  }
+}
+
+// Retrieve cached data for a specific tab, URL, and key indicating shortened or expanded state
+function getCachedRequestData(tabId, url, isShortened) {
+  if (requestCache.has(tabId)) {
+    const tabCache = requestCache.get(tabId);
+    if (tabCache.has(url)) {
+      const urlCache = tabCache.get(url);
+      const key = isShortened ? 'shortened' : 'expanded';
+      if (urlCache[key]) {
+        return urlCache[key];
+      }
+    }
+  }
+  return null;
+}
+
+// Clear cache when a tab is removed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (requestCache.has(tabId)) {
+    requestCache.delete(tabId);
+    debugLog('Cache cleared for tab:', tabId);
+  }
+});
+
 // Trigger auto-clean process on tab updates
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   await loadSettings();
-
-  if (!settings.autoClean || !changeInfo.url || tab.status !== 'complete' || !changeInfo.url.includes('youtube.com/watch')) {
-    debugLog('Skipping auto-clean for tab:', tabId);
+  if (!settings.autoClean) {
+    debugLog('Skipping auto-clean for tab:', tabId, '- Reason: Auto-clean is disabled in settings');
     return;
   }
 
+  if (tab.status !== 'complete') {
+    debugLog('Skipping auto-clean for tab:', tabId, '- Reason: Tab is not fully loaded');
+    return;
+  }
+  if (!tab.url.includes('youtube.com/watch')) {
+    debugLog('Skipping auto-clean for tab:', tabId, '- Reason: URL is not a YouTube watch page');
+    return;
+  }
   debugLog('Starting auto-clean process for tab:', tabId);
 
-  setTimeout(async () => {
-    try {
-      const response = await chrome.tabs.sendMessage(tabId, { 
-        action: "rewriteDescription",
-        debug: settings.debugMode
-      });
+  try {
+    const contentResponse = await chrome.tabs.sendMessage(tabId, {
+      action: "getDescriptionForRewrite",
+      debug: settings.debugMode
+    });
 
-      if (response.error) throw new Error(`Content script error: ${response.error}`);
+    if (contentResponse.error) throw new Error(`Content script error: ${contentResponse.error}`);
 
-      const aiResponse = await processWithAI({
-        text: response.text,
-        apiBackend: settings.apiBackend,
-        apiKey: settings.apiKey,
-        debug: settings.debugMode
-      });
+    const rewriteResponse = await rewriteDescription({
+      text: contentResponse.text,
+      apiBackend: settings.apiBackend,
+      apiKey: settings.apiKey,
+      debug: settings.debugMode,
+      tabId: tabId,
+      url: tab.url,
+      isShortened: contentResponse.isShortened
+    });
 
-      if (aiResponse.error) throw new Error(`AI processing error: ${aiResponse.error}`);
+    if (rewriteResponse.error) throw new Error(`Processing error: ${rewriteResponse.error}`);
 
-      await chrome.tabs.sendMessage(tabId, {
-        action: "updateDescription",
-        newText: aiResponse.rewrittenText,
-        debug: settings.debugMode
-      });
+    await chrome.tabs.sendMessage(tabId, {
+      action: "changeDescriptionToRewritten",
+      newText: rewriteResponse.rewrittenText,
+      debug: settings.debugMode
+    });
 
-      debugLog('Auto-clean completed successfully');
-    } catch (error) {
-      debugLog('Auto-clean failed:', error.message);
-    }
-  }, 1500);
+    debugLog('Auto-clean completed successfully');
+  } catch (error) {
+    debugLog('Auto-clean failed:', error.message);
+  }
 });
 
 // Handle runtime messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   debugLog('New message received:', request.action, 'from:', sender.url);
 
-  if (request.action === "processWithAI") {
-    processWithAI(request)
+  if (request.action === "rewriteDescription") {
+    rewriteDescription(request)
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ error: error.message }));
 
@@ -93,14 +159,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// Unified function for AI-based text processing
-async function processWithAI({ text, apiBackend, apiKey, debug }) {
+// Unified function for text processing. Checks cache and uses the selected backend for rewriting.
+async function rewriteDescription({ text, apiBackend, apiKey, debug, tabId, url, isShortened }) {
   await loadSettings();
 
   const backend = apiBackend || settings.apiBackend;
   const key = apiKey || settings.apiKey;
 
-  debugLog(`Processing with ${backend} backend`);
+  debugLog(`Processing with ${backend} backend for tab: ${tabId}, URL: ${url}, isShortened: ${isShortened}`);
+
+  // Check if the request is already cached
+  if (isRequestCached(tabId, url, isShortened)) {
+    const cachedData = getCachedRequestData(tabId, url, isShortened);
+    if (cachedData && cachedData.rewrittenText) {
+      debugLog('Returning cached result for tab:', tabId, 'URL:', url, 'isShortened:', isShortened);
+      return { rewrittenText: cachedData.rewrittenText };
+    }
+  }
 
   try {
     let result;
@@ -120,7 +195,10 @@ async function processWithAI({ text, apiBackend, apiKey, debug }) {
         throw new Error(`Unknown backend: ${backend}`);
     }
 
-    return { rewrittenText: await result };
+    // Cache the result
+    cacheRequestData(tabId, url, isShortened, text, result);
+
+    return { rewrittenText: result };
   } catch (error) {
     return { error: error.message };
   }

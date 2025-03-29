@@ -1,24 +1,26 @@
-let originalDescription = '';
-let originalHTML = '';
-let originalElement = null;
+const globalState = {
+  originalDescription: '',
+  originalHTML: '',
+  originalElement: null,
+};
 
 // Finds the description element on the page. It attempts to locate the expanded description first,
 // then the collapsed version, and finally falls back to other potential description containers.
 function findDescriptionElement() {
+  const collapsed = document.querySelector(
+    '#attributed-snippet-text > .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
+  );
+  if (collapsed) return {element: collapsed, isShortened: true};
+
   const expanded = document.querySelector(
     '#description-inline-expander yt-attributed-string.ytd-text-inline-expander.style-scope ' +
     '> .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
   );
-  if (expanded) return expanded;
+  if (expanded) return {element: expanded, isShortened: false};
 
-  const collapsed = document.querySelector(
-    '#attributed-snippet-text > .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
-  );
-  if (collapsed) return collapsed;
-
-  return document.querySelector("#description-inline-expander") || 
+  return {element: document.querySelector("#description-inline-expander") || 
          document.querySelector("#description.ytd-video-secondary-info-renderer") ||
-         document.querySelector("yt-formatted-string#content");
+         document.querySelector("yt-formatted-string#content"), isShortened: /* unknown */ false };
 }
 
 // Adds a "Restore original" button next to the modified description element. This button allows
@@ -41,11 +43,34 @@ function addRestoreButton(element) {
 
   // Adds a click event listener to restore the original description and remove the button afterward.
   revertButton.querySelector('span').addEventListener('click', () => {
-    element.innerHTML = originalHTML;
+    element.innerHTML = globalState.originalHTML;
     revertButton.remove();
   });
 
   element.parentElement.insertBefore(revertButton, element.nextSibling);
+}
+
+// Retrieves the description element and saves its original content for potential restoration.
+function getDescriptionForRewrite(sendResponse) {
+  const { element, isShortened } = findDescriptionElement();
+  if (element) {
+    globalState.originalElement = element;
+    globalState.originalHTML = element.innerHTML;
+    globalState.originalDescription = element.innerText;
+    sendResponse({ text: globalState.originalDescription, html: globalState.originalHTML, isShortened });
+  } else {
+    sendResponse({ error: "Element not found" });
+  }
+}
+
+// Updates the description element with new content and adds a restore button for reverting changes.
+function changeDescriptionToRewritten(request, sendResponse) {
+  const element = globalState.originalElement || findDescriptionElement().element;
+  if (element) {
+    element.innerHTML = request.newText.replace(/\n/g, '<br>');
+    addRestoreButton(element);
+    sendResponse({ success: true });
+  }
 }
 
 // Listens for messages from the extension's background script or popup. Handles actions to either
@@ -53,25 +78,10 @@ function addRestoreButton(element) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.debug) console.log("[DEBUG] Message received:", request.action);
 
-  if (request.action === "rewriteDescription") {
-    // Retrieves the description element and saves its original content for potential restoration.
-    const element = findDescriptionElement();
-    if (element) {
-      originalElement = element;
-      originalHTML = element.innerHTML;
-      originalDescription = element.innerText;
-      sendResponse({ text: originalDescription, html: originalHTML });
-    } else {
-      sendResponse({ error: "Element not found" });
-    }
+  if (request.action === "getDescriptionForRewrite") {
+    getDescriptionForRewrite(sendResponse);
   } 
-  else if (request.action === "updateDescription") {
-    // Updates the description element with new content and adds a restore button for reverting changes.
-    const element = originalElement || findDescriptionElement();
-    if (element) {
-      element.innerHTML = request.newText.replace(/\n/g, '<br>');
-      addRestoreButton(element);
-      sendResponse({ success: true });
-    }
+  else if (request.action === "changeDescriptionToRewritten") {
+    changeDescriptionToRewritten(request, sendResponse);
   }
 });
