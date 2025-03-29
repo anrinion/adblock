@@ -1,37 +1,46 @@
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load user settings from Chrome's synchronized storage and populate the UI fields with the retrieved values.
-  const settings = await chrome.storage.sync.get([
-    'apiBackend',
-    'apiKey',
-    'debugMode',
-    'autoClean'
-  ]);
+  // Load user settings from Chrome's synchronized storage
+  const settings = await chrome.storage.sync.get(['apiBackend', 'apiKeys', 'debugMode', 'autoClean']);
 
-  document.getElementById('apiBackend').value = settings.apiBackend || 'simple';
-  document.getElementById('apiKey').value = settings.apiKey || '';
+  const apiKeys = new Map(Object.entries(settings.apiKeys || {}));
+  const apiBackendSelect = document.getElementById('apiBackend');
+  const apiKeyInput = document.getElementById('apiKey');
+
+  apiBackendSelect.value = settings.apiBackend || 'simple';
+  apiKeyInput.value = apiKeys.get(apiBackendSelect.value) || '';
   document.getElementById('debugToggle').checked = settings.debugMode || false;
   document.getElementById('autoClean').checked = settings.autoClean || false;
 
-  // Dynamically toggle the visibility of the API key input field based on the selected API backend mode.
-  document.getElementById('apiBackend').addEventListener('change', function () {
+  // Toggle API key input visibility based on the selected backend
+  apiBackendSelect.addEventListener('change', function () {
+    const selectedBackend = this.value;
+    apiKeyInput.value = apiKeys.get(selectedBackend) || '';
     document.getElementById('apiKeyGroup').style.display =
-      this.value === 'simple' ? 'none' : 'block';
+      selectedBackend === 'simple' ? 'none' : 'block';
   });
   document.getElementById('apiKeyGroup').style.display =
-    document.getElementById('apiBackend').value === 'simple' ? 'none' : 'block';
+    apiBackendSelect.value === 'simple' ? 'none' : 'block';
 });
 
 const saveSettings = async () => {
-  // Save the current state of the settings to Chrome's synchronized storage.
+  const apiBackend = document.getElementById('apiBackend').value;
+  const apiKey = document.getElementById('apiKey').value;
+
+  // Load existing API keys from storage and update the Map
+  const settings = await chrome.storage.sync.get(['apiKeys']);
+  const apiKeys = new Map(Object.entries(settings.apiKeys || {}));
+  apiKeys.set(apiBackend, apiKey);
+
+  // Save the updated settings to Chrome's synchronized storage
   await chrome.storage.sync.set({
-    apiBackend: document.getElementById('apiBackend').value,
-    apiKey: document.getElementById('apiKey').value,
+    apiBackend,
+    apiKeys: Object.fromEntries(apiKeys),
     debugMode: document.getElementById('debugToggle').checked,
-    autoClean: document.getElementById('autoClean').checked
+    autoClean: document.getElementById('autoClean').checked,
   });
 };
 
-// Attach event listeners to save settings whenever the user modifies any of the input fields.
+// Attach event listeners to save settings whenever the user modifies any of the input fields
 document.getElementById('apiBackend').addEventListener('change', saveSettings);
 document.getElementById('apiKey').addEventListener('input', saveSettings);
 document.getElementById('debugToggle').addEventListener('change', saveSettings);

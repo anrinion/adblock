@@ -1,10 +1,10 @@
-AI_REQUEST = 'Remove sponsors and irrelevant links (like contacts and references), but keep the core content and timestamps links: ';
+const AI_REQUEST = 'Remove sponsors and irrelevant links (like contacts and references), but keep the core content and timestamps links: ';
 
 // Configuration object to store user settings
 let settings = {
   autoClean: false,
   apiBackend: 'simple',
-  apiKey: '',
+  apiKeys: {}, // Map of backend names to API keys
   debugMode: false
 };
 
@@ -21,7 +21,7 @@ async function loadSettings() {
     chrome.storage.sync.get({
       autoClean: false,
       apiBackend: 'simple',
-      apiKey: '',
+      apiKeys: {}, // Default to an empty object
       debugMode: false
     }, (result) => {
       settings = result;
@@ -35,7 +35,11 @@ async function loadSettings() {
 chrome.storage.onChanged.addListener((changes) => {
   debugLog('Storage changes detected:', JSON.stringify(changes, null, 2));
   for (let key in changes) {
-    settings[key] = changes[key].newValue;
+    if (key === 'apiKeys') {
+      settings.apiKeys = { ...settings.apiKeys, ...changes[key].newValue }; // Merge updated keys
+    } else {
+      settings[key] = changes[key].newValue;
+    }
     debugLog(`Updated setting: ${key} =`, changes[key].newValue);
   }
 });
@@ -158,7 +162,7 @@ async function doRewrite(tab) {
     text: contentResponse.text,
     html: contentResponse.html,
     apiBackend: settings.apiBackend,
-    apiKey: settings.apiKey,
+    apiKey: settings.apiKeys[settings.apiBackend],
     debug: settings.debugMode,
     tabId: tab.id,
     url: tab.url,
