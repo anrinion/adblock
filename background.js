@@ -1,4 +1,4 @@
-const AI_REQUEST = 'Remove sponsors and irrelevant links (like contacts and references), but keep the core content and timestamps links: ';
+const AI_REQUEST = 'Remove sponsors and irrelevant links (like contacts and references), but keep the core content and timestamps links:\n\n';
 
 // Configuration object to store user settings
 let settings = {
@@ -233,53 +233,50 @@ function simpleRewrite(text, debug) {
 }
 
 // API is expensive... so we send to LLMs only the minumum required data. It's mostly useless anyway.
-function sanitizeYouTubeHTML(html) {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  
-  // Allowed elements (most attributes will be stripped)
+function sanitizeHtml(html) {
+  // First remove all forbidden elements (script, style, etc.)
+  html = html.replace(/<\/?(script|style|iframe|frameset|frame|object|embed|applet)[^>]*>/gi, '');
+
+  // Allow only these tags (others will be stripped, keeping content)
   const allowedTags = [
     'p', 'br', 'hr',
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'ul', 'ol', 'li',
     'strong', 'b', 'em', 'i', 'u', 's', 'code',
-    'a'  // All attributes will be preserved for links
+    'a'
   ];
 
-  // Process all elements
-  const nodes = [...doc.body.querySelectorAll('*')];
-  
-  for (const node of nodes) {
-    const tagName = node.tagName.toLowerCase();
-    
-    // Remove disallowed elements
-    if (!allowedTags.includes(tagName)) {
-      node.replaceWith(...node.childNodes);
-      continue;
-    }
-    
-    // Special case: preserve ALL attributes for links
-    if (tagName !== 'a') {
-      // Strip all attributes from non-link elements
-      while (node.attributes.length > 0) {
-        node.removeAttribute(node.attributes[0].name);
-      }
-    }
-  }
-
-  // Remove empty elements (except single BR/HR tags)
-  doc.body.querySelectorAll('*').forEach(el => {
-    if (!['BR', 'HR'].includes(el.tagName) && !el.textContent.trim()) {
-      el.remove();
-    }
+  // 1. Remove all forbidden tags (but keep their content)
+  allowedTags.forEach(tag => {
+    const regex = new RegExp(`<\/?(?!${tag})[^>]+>`, 'gi');
+    html = html.replace(regex, '');
   });
 
-  return doc.body.innerHTML;
+  // 2. For allowed tags, remove all attributes except:
+  //    - Keep ALL attributes for <a> tags
+  //    - Remove ALL attributes for other tags
+  html = html.replace(/<(?!\/?a\b)([a-z][a-z0-9]*)([^>]*)>/gi, function(match, tagName, attrs) {
+    return allowedTags.includes(tagName.toLowerCase()) ? `<${tagName}>` : '';
+  });
+
+  // Special handling for <a> tags - preserve all attributes
+  html = html.replace(/<a\s([^>]*)>/gi, function(match, attrs) {
+    // Basic XSS protection for href attributes
+    const cleanAttrs = attrs.replace(/\bhref\s*=\s*["']?javascript:[^"'\s>]*/gi, '');
+    return `<a ${cleanAttrs.trim()}>`;
+  });
+
+  // Remove empty tags (except <br> and <hr>)
+  html = html.replace(/<(?!br|hr|img)\w[^>]*>\s*<\/\w+>/g, '');
+
+  return html;
 }
 
 // Rewrite text using the Gemini API
 async function rewriteWithGemini(html, apiKey, debug) {
   try {
-    const prompt = `${AI_REQUEST}:\n\n${sanitizeYouTubeHTML(html)}`;
+    debugLog('Gemini API key:', apiKey);
+    const prompt = `${AI_REQUEST}${sanitizeHtml(html)}`;
     debugLog('Gemini API prompt:', prompt);
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
@@ -300,6 +297,47 @@ async function rewriteWithGemini(html, apiKey, debug) {
     }
 
     return data.candidates[0].content.parts[0].text;
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Rewrite text using the ChatGPT API
+async function rewriteWithChatGPT(html, apiKey, debug) {
+  try {
+    debugLog('ChatGPT API key:', apiKey);
+
+    const prompt = `${AI_REQUEST}${sanitizeHtml(html)}`;
+    debugLog('ChatGPT API prompt:', prompt);
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant that rewrites YouTube descriptions.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`API error: ${errorData.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response structure from ChatGPT');
+    }
+
+    return data.choices[0].message.content;
   } catch (error) {
     throw error;
   }
