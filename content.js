@@ -3,7 +3,7 @@ const globalState = {
   originalHTML: '',
   originalElement: null,
   isRewritten: false,
-  debugMode: false // Added debugMode to global state
+  debugMode: true
 };
 
 // Debug logger function
@@ -17,7 +17,7 @@ function debugLog(...args) {
 // then the collapsed version, and finally falls back to other potential description containers.
 function findDescriptionElement() {
   debugLog('Attempting to find description element...');
-  
+
   const moreButton = document.querySelector('tp-yt-paper-button#expand');
   const isShortened = moreButton && !moreButton.hasAttribute('hidden');
 
@@ -91,11 +91,11 @@ function getDescriptionForRewrite(sendResponse) {
 // Updates the description element with new content and adds a restore button for reverting changes.
 function changeDescriptionToRewritten(request, sendResponse) {
   if (!globalState.originalElement) {
-    console.error('Desciption element not found (changeDescriptionToRewritten)');
+    debugLog('Desciption element not found (changeDescriptionToRewritten)');
     return;
   }
   globalState.isRewritten = true;
-  globalState.originalElement.innerHTML = request.newText.replace(/\n/g, '<br>');
+  globalState.originalElement.innerHTML = request.newHtml;
   addRestoreButton(globalState.originalElement);
   sendResponse({ success: true });
 }
@@ -107,21 +107,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     globalState.debugMode = request.debug; // Update debugMode based on the request
   }
 
-  if (globalState.debugMode) {
-    console.log("[DEBUG] Message received:", request.action, request);
-  }
+  debugLog("[DEBUG] Message received:", request.action, request);
 
   if (request.action === "getDescriptionForRewrite") {
     getDescriptionForRewrite(sendResponse);
   } else if (request.action === "changeDescriptionToRewritten") {
     changeDescriptionToRewritten(request, sendResponse);
   } else {
-    console.error('Unknown action:', request.action);
+    debugLog('Unknown action:', request.action);
   }
 });
 
 // Observe and intercept clicks on the "...more" button
 function interceptMoreButton() {
+  if (!globalState.autoClean) {
+    debugLog('Auto-clean is disabled. Skipping the "...more" button interception.');
+    return;
+  }
   const observer = new MutationObserver(() => {
     const moreButton = document.querySelector('tp-yt-paper-button#expand');
     if (moreButton) {
@@ -144,7 +146,7 @@ function interceptMoreButton() {
                 debugLog('Error communicating with background script:', error);
               }
             })();
-          }, 500); // Delay to allow the extended description to load
+          }, 10); // Delay to allow the extended description to load
         });
         moreButton.dataset.listenerAdded = "true"; // Mark the button to prevent duplicate listeners
       }
@@ -152,8 +154,30 @@ function interceptMoreButton() {
   });
 
   // Observe changes in the DOM to detect when the "...more" button is added
+  debugLog('The "...more" button interception started.');
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
-// Initialize interception logic
-interceptMoreButton();
+// Load user settings from Chrome's synchronized storage
+async function loadSettings() {
+  return new Promise(resolve => {
+    chrome.storage.sync.get({
+      autoClean: false,
+      debugMode: false
+    }, (result) => {
+      globalState.debugMode = result.debugMode || false;
+      globalState.autoClean = result.autoClean || false;
+      resolve();
+    });
+  });
+}
+
+// Initialization
+try {
+  loadSettings().then(() => {
+    debugLog('Settings loaded:', globalState);
+    interceptMoreButton();
+  });
+} catch (error) {
+  debugLog('An error occurred during script initialization:', error);
+}

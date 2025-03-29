@@ -56,18 +56,17 @@ function isRequestCached(tabId, url, isShortened) {
     debugLog('Request already cached for tab:', tabId, 'URL:', url, 'Key:', key);
     return true;
   }
-  urlCache[key] = true;
   return false;
 }
 
 // Store original and rewritten text in the cache with a key for shortened or expanded state
-function cacheRequestData(tabId, url, isShortened, originalText, rewrittenText) {
+function cacheRequestData(tabId, url, isShortened, newHtml) {
   if (requestCache.has(tabId)) {
     const tabCache = requestCache.get(tabId);
     if (tabCache.has(url)) {
       const urlCache = tabCache.get(url);
       const key = isShortened ? 'shortened' : 'expanded';
-      urlCache[key] = { originalText, rewrittenText };
+      urlCache[key] = newHtml;
       debugLog('Adding to cache data for tab:', tabId, 'URL:', url, 'Key:', key);
     }
   }
@@ -80,12 +79,10 @@ function getCachedRequestData(tabId, url, isShortened) {
     if (tabCache.has(url)) {
       const urlCache = tabCache.get(url);
       const key = isShortened ? 'shortened' : 'expanded';
-      if (urlCache[key]) {
-        return urlCache[key];
-      }
+      return urlCache[key];
     }
   }
-  return null;
+  return undefined;
 }
 
 // Clear cache when a tab is removed
@@ -157,6 +154,7 @@ async function doRewrite(tab) {
 
   const rewriteResponse = await rewriteDescription({
     text: contentResponse.text,
+    html: contentResponse.html,
     apiBackend: settings.apiBackend,
     apiKey: settings.apiKey,
     debug: settings.debugMode,
@@ -166,11 +164,10 @@ async function doRewrite(tab) {
   });
 
   if (rewriteResponse.error) throw new Error(`Processing error: ${rewriteResponse.error}`);
-  debugLog('Result (first 10 symbols):', rewriteResponse.rewrittenText.slice(0, 10));
 
   contentResponse = await chrome.tabs.sendMessage(tab.id, {
     action: "changeDescriptionToRewritten",
-    newText: rewriteResponse.rewrittenText,
+    newHtml: rewriteResponse.newHtml,
     debug: settings.debugMode
   });
   if (contentResponse.error) throw new Error(`Content script error: ${contentResponse.error}`);
@@ -178,7 +175,7 @@ async function doRewrite(tab) {
 }
 
 // Unified function for text processing. Checks cache and uses the selected backend for rewriting.
-async function rewriteDescription({ text, apiBackend, apiKey, debug, tabId, url, isShortened }) {
+async function rewriteDescription({ text, html, apiBackend, apiKey, debug, tabId, url, isShortened }) {
   await loadSettings();
 
   const backend = apiBackend || settings.apiBackend;
@@ -189,9 +186,9 @@ async function rewriteDescription({ text, apiBackend, apiKey, debug, tabId, url,
   // Check if the request is already cached
   if (isRequestCached(tabId, url, isShortened)) {
     const cachedData = getCachedRequestData(tabId, url, isShortened);
-    if (cachedData && cachedData.rewrittenText) {
+    if (cachedData && cachedData.newHtml) {
       debugLog('Returning cached result for tab:', tabId, 'URL:', url, 'isShortened:', isShortened);
-      return { rewrittenText: cachedData.rewrittenText };
+      return { newHtml: cachedData.newHtml };
     }
   }
 
@@ -199,15 +196,15 @@ async function rewriteDescription({ text, apiBackend, apiKey, debug, tabId, url,
     let result;
     switch (backend) {
       case 'simple':
-        result = simpleRewrite(text, debug);
+        result = simpleRewrite(text, debug).replace(/(?:\r\n|\r|\n)/g, '<br>');
         break;
       case 'gemini':
         if (!key) throw new Error('Missing Gemini API key');
-        result = await rewriteWithGemini(text, key, debug);
+        result = await rewriteWithGemini(html, key, debug);
         break;
       case 'chatgpt':
         if (!key) throw new Error('Missing ChatGPT API key');
-        result = await rewriteWithChatGPT(text, key, debug);
+        result = await rewriteWithChatGPT(html, key, debug);
         break;
       default:
         throw new Error(`Unknown backend: ${backend}`);
@@ -216,7 +213,7 @@ async function rewriteDescription({ text, apiBackend, apiKey, debug, tabId, url,
     // Cache the result
     cacheRequestData(tabId, url, isShortened, text, result);
 
-    return { rewrittenText: result };
+    return { newHtml: result };
   } catch (error) {
     return { error: error.message };
   }
@@ -232,7 +229,8 @@ function simpleRewrite(text, debug) {
 // Rewrite text using the Gemini API
 async function rewriteWithGemini(text, apiKey, debug) {
   try {
-    const prompt = `Remove sponsors/links from YouTube description, keep core content:\n\n${text}`;
+    const prompt = `Remove sponsors and irrelevant links (like contacts and references), but keep the core content and timestamps links:\n\n${text}`;
+    debugLog('Gemini API prompt:', prompt);
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

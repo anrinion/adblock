@@ -60,7 +60,6 @@ document.getElementById('rewriteBtn').addEventListener('click', async () => {
     statusEl.style.color = 'green';
   } catch (error) {
     // Display error messages to the user in case of failure.
-    console.error('Error:', error);
     statusEl.textContent += `\nError: ${error.message}`;
     statusEl.style.color = 'red';
   }
