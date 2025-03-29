@@ -2,6 +2,8 @@ let originalDescription = '';
 let originalHTML = '';
 let originalElement = null;
 
+// Finds the description element on the page. It attempts to locate the expanded description first,
+// then the collapsed version, and finally falls back to other potential description containers.
 function findDescriptionElement() {
   const expanded = document.querySelector(
     '#description-inline-expander yt-attributed-string.ytd-text-inline-expander.style-scope ' +
@@ -19,6 +21,8 @@ function findDescriptionElement() {
          document.querySelector("yt-formatted-string#content");
 }
 
+// Adds a "Restore original" button next to the modified description element. This button allows
+// users to revert the description back to its original state. If a button already exists, it is removed first.
 function addRestoreButton(element) {
   const oldButton = element.parentElement.querySelector('.restore-button');
   if (oldButton) oldButton.remove();
@@ -35,18 +39,22 @@ function addRestoreButton(element) {
     </span>
   `;
 
+  // Adds a click event listener to restore the original description and remove the button afterward.
   revertButton.querySelector('span').addEventListener('click', () => {
     element.innerHTML = originalHTML;
-    revertButton.remove(); // Удаляем кнопку после восстановления
+    revertButton.remove();
   });
 
   element.parentElement.insertBefore(revertButton, element.nextSibling);
 }
 
+// Listens for messages from the extension's background script or popup. Handles actions to either
+// retrieve the current description or update it with new content.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.debug) console.log("[DEBUG] Message received:", request.action);
 
   if (request.action === "rewriteDescription") {
+    // Retrieves the description element and saves its original content for potential restoration.
     const element = findDescriptionElement();
     if (element) {
       originalElement = element;
@@ -58,6 +66,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   } 
   else if (request.action === "updateDescription") {
+    // Updates the description element with new content and adds a restore button for reverting changes.
     const element = originalElement || findDescriptionElement();
     if (element) {
       element.innerHTML = request.newText.replace(/\n/g, '<br>');
