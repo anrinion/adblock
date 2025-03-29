@@ -1,3 +1,5 @@
+AI_REQUEST = 'Remove sponsors and irrelevant links (like contacts and references), but keep the core content and timestamps links: ';
+
 // Configuration object to store user settings
 let settings = {
   autoClean: false,
@@ -226,10 +228,54 @@ function simpleRewrite(text, debug) {
   return text.trim();
 }
 
+// API is expensive... so we send to LLMs only the minumum required data. It's mostly useless anyway.
+function sanitizeYouTubeHTML(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  
+  // Allowed elements (most attributes will be stripped)
+  const allowedTags = [
+    'p', 'br', 'hr',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li',
+    'strong', 'b', 'em', 'i', 'u', 's', 'code',
+    'a'  // All attributes will be preserved for links
+  ];
+
+  // Process all elements
+  const nodes = [...doc.body.querySelectorAll('*')];
+  
+  for (const node of nodes) {
+    const tagName = node.tagName.toLowerCase();
+    
+    // Remove disallowed elements
+    if (!allowedTags.includes(tagName)) {
+      node.replaceWith(...node.childNodes);
+      continue;
+    }
+    
+    // Special case: preserve ALL attributes for links
+    if (tagName !== 'a') {
+      // Strip all attributes from non-link elements
+      while (node.attributes.length > 0) {
+        node.removeAttribute(node.attributes[0].name);
+      }
+    }
+  }
+
+  // Remove empty elements (except single BR/HR tags)
+  doc.body.querySelectorAll('*').forEach(el => {
+    if (!['BR', 'HR'].includes(el.tagName) && !el.textContent.trim()) {
+      el.remove();
+    }
+  });
+
+  return doc.body.innerHTML;
+}
+
 // Rewrite text using the Gemini API
-async function rewriteWithGemini(text, apiKey, debug) {
+async function rewriteWithGemini(html, apiKey, debug) {
   try {
-    const prompt = `Remove sponsors and irrelevant links (like contacts and references), but keep the core content and timestamps links:\n\n${text}`;
+    const prompt = `${AI_REQUEST}:\n\n${sanitizeYouTubeHTML(html)}`;
     debugLog('Gemini API prompt:', prompt);
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
