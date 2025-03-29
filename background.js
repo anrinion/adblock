@@ -122,7 +122,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   debugLog('Starting auto-clean process for tab:', tabId);
 
   try {
-    await doRewrite(tabId, tab);
+    await doRewrite(tab);
   } catch (error) {
     debugLog('Auto-clean failed:', error.message);
     return;
@@ -131,10 +131,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  debugLog('New message received:', request.action, 'from:', sender.url);
+  debugLog('New message received:', request.action, 'from:', sender.url, 'tab: ', (request.tab || sender.tab)?.id);
 
   if (request.action === "doRewrite") {
-    doRewrite(request.tabId, request.tab)
+    doRewrite(request.tab || sender.tab)
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ error: error.message }));
 
@@ -146,8 +146,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // 1. Retrieves the description element;
 // 2. Sends it to the backend for rewriting;
 // 3. Updates the description element with the rewritten text.
-async function doRewrite(tabId, tab) {
-  let contentResponse = await chrome.tabs.sendMessage(tabId, {
+async function doRewrite(tab) {
+  debugLog('Starting doRewrite for tab:', tab.id, 'URL:', tab.url);
+  let contentResponse = await chrome.tabs.sendMessage(tab.id, {
     action: "getDescriptionForRewrite",
     debug: settings.debugMode
   });
@@ -159,7 +160,7 @@ async function doRewrite(tabId, tab) {
     apiBackend: settings.apiBackend,
     apiKey: settings.apiKey,
     debug: settings.debugMode,
-    tabId: tabId,
+    tabId: tab.id,
     url: tab.url,
     isShortened: contentResponse.isShortened
   });
@@ -167,7 +168,7 @@ async function doRewrite(tabId, tab) {
   if (rewriteResponse.error) throw new Error(`Processing error: ${rewriteResponse.error}`);
   debugLog('Result (first 10 symbols):', rewriteResponse.rewrittenText.slice(0, 10));
 
-  contentResponse = await chrome.tabs.sendMessage(tabId, {
+  contentResponse = await chrome.tabs.sendMessage(tab.id, {
     action: "changeDescriptionToRewritten",
     newText: rewriteResponse.rewrittenText,
     debug: settings.debugMode

@@ -18,21 +18,17 @@ function debugLog(...args) {
 function findDescriptionElement() {
   debugLog('Attempting to find description element...');
   
-  const expanded = document.querySelector(
+  const moreButton = document.querySelector('tp-yt-paper-button#expand');
+  const isShortened = moreButton && !moreButton.hasAttribute('hidden');
+
+  let element = document.querySelector(
     '#description-inline-expander yt-attributed-string.ytd-text-inline-expander.style-scope ' +
     '> .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
   );
-  if (expanded) {
-    debugLog('Found expanded description element:', expanded);
-    return { element: expanded, isShortened: false };
-  }
 
-  const collapsed = document.querySelector(
-    '#attributed-snippet-text > .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
-  );
-  if (collapsed) {
-    debugLog('Found collapsed description element:', collapsed);
-    return { element: collapsed, isShortened: true };
+  if (element) {
+    debugLog('Found expanded description element:', element);
+    return { element, isShortened };
   }
 
   const fallback = document.querySelector("#description-inline-expander") ||
@@ -44,7 +40,7 @@ function findDescriptionElement() {
     debugLog('No description element found.');
   }
 
-  return { element: fallback, isShortened: /* unknown */ false };
+  return { element, isShortened };
 }
 
 // Adds a "Restore original" button next to the modified description element. This button allows
@@ -123,3 +119,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.error('Unknown action:', request.action);
   }
 });
+
+// Observe and intercept clicks on the "...more" button
+function interceptMoreButton() {
+  const observer = new MutationObserver(() => {
+    const moreButton = document.querySelector('tp-yt-paper-button#expand');
+    if (moreButton) {
+      if (!moreButton.dataset.listenerAdded) {
+        moreButton.addEventListener('click', async () => {
+          debugLog('"...more" button clicked. Cleaning extended description...');
+          setTimeout(() => {
+            // Trigger cleaning after the extended description is loaded
+            (async () => {
+              try {
+                const response = await chrome.runtime.sendMessage({
+                  action: "doRewrite",
+                });
+                if (response.error) {
+                  debugLog('Error cleaning extended description:', response.error);
+                } else {
+                  debugLog('Background script processed the rewrite successfully.');
+                }
+              } catch (error) {
+                debugLog('Error communicating with background script:', error);
+              }
+            })();
+          }, 500); // Delay to allow the extended description to load
+        });
+        moreButton.dataset.listenerAdded = "true"; // Mark the button to prevent duplicate listeners
+      }
+    }
+  });
+
+  // Observe changes in the DOM to detect when the "...more" button is added
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+// Initialize interception logic
+interceptMoreButton();
