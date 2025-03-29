@@ -38,64 +38,23 @@ document.getElementById('debugToggle').addEventListener('change', saveSettings);
 document.getElementById('autoClean').addEventListener('change', saveSettings);
 
 document.getElementById('rewriteBtn').addEventListener('click', async () => {
-  // Handle the "Rewrite" button click to process the current tab's content using AI or other logic.
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const { apiBackend, apiKey, debugMode } = await chrome.storage.sync.get([
-    'apiBackend',
-    'apiKey',
-    'debugMode',
-    'autoClean'
-  ]);
-
   const statusEl = document.getElementById('status');
   statusEl.textContent = 'Processing...';
   statusEl.style.color = '#666';
 
   try {
-    // Ensure the API key is provided when using advanced AI modes.
-    if (apiBackend !== 'simple' && !apiKey) {
-      throw new Error('API key required for AI modes');
-    }
-
-    // Request the current description text from the content script in the active tab.
-    const contentResponse = await chrome.tabs.sendMessage(tab.id, {
-      action: "getDescriptionForRewrite",
-      debug: debugMode
-    });
-
-    if (debugMode) {
-      statusEl.textContent += '\nFetched description from content script.';
-    }
+    // Handle the "Rewrite" button click to process the current tab's content using AI or other logic.
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     // Send the retrieved text to the background script for processing.
     const backgroundResponse = await chrome.runtime.sendMessage({
-      action: "rewriteDescription",
-      text: contentResponse.text,
-      apiBackend,
-      apiKey,
-      debug: debugMode,
+      action: "doRewrite",
       tabId: tab.id,
-      url: tab.url,
-      isShortened: contentResponse.isShortened
+      tab: tab,
     });
-
-    if (debugMode) {
-      statusEl.textContent += '\nSent text to background script for rewriting.';
-    }
 
     // Handle errors returned from the background processing.
     if (backgroundResponse.error) throw new Error(backgroundResponse.error);
-
-    // Update the description in the active tab with the rewritten text.
-    await chrome.tabs.sendMessage(tab.id, {
-      action: "changeDescriptionToRewritten",
-      newText: backgroundResponse.rewrittenText,
-      debug: debugMode
-    });
-
-    if (debugMode) {
-      statusEl.textContent += '\nUpdated description in the active tab.';
-    }
 
     statusEl.textContent += '\nDescription cleaned!';
     statusEl.style.color = 'green';

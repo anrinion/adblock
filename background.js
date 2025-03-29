@@ -68,7 +68,7 @@ function cacheRequestData(tabId, url, isShortened, originalText, rewrittenText) 
       const urlCache = tabCache.get(url);
       const key = isShortened ? 'shortened' : 'expanded';
       urlCache[key] = { originalText, rewrittenText };
-      debugLog('Cached data for tab:', tabId, 'URL:', url, 'Key:', key);
+      debugLog('Adding to cache data for tab:', tabId, 'URL:', url, 'Key:', key);
     }
   }
 }
@@ -112,52 +112,69 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     debugLog('Skipping auto-clean for tab:', tabId, '- Reason: URL is not a YouTube watch page');
     return;
   }
+
+  // Add a 1s delay if the URL has changed
+  if (changeInfo.url) {
+    debugLog('URL change detected for tab:', tabId, '- Adding 1s delay before processing');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
   debugLog('Starting auto-clean process for tab:', tabId);
 
   try {
-    const contentResponse = await chrome.tabs.sendMessage(tabId, {
-      action: "getDescriptionForRewrite",
-      debug: settings.debugMode
-    });
-
-    if (contentResponse.error) throw new Error(`Content script error: ${contentResponse.error}`);
-
-    const rewriteResponse = await rewriteDescription({
-      text: contentResponse.text,
-      apiBackend: settings.apiBackend,
-      apiKey: settings.apiKey,
-      debug: settings.debugMode,
-      tabId: tabId,
-      url: tab.url,
-      isShortened: contentResponse.isShortened
-    });
-
-    if (rewriteResponse.error) throw new Error(`Processing error: ${rewriteResponse.error}`);
-
-    await chrome.tabs.sendMessage(tabId, {
-      action: "changeDescriptionToRewritten",
-      newText: rewriteResponse.rewrittenText,
-      debug: settings.debugMode
-    });
-
-    debugLog('Auto-clean completed successfully');
+    await doRewrite(tabId, tab);
   } catch (error) {
     debugLog('Auto-clean failed:', error.message);
+    return;
   }
+  debugLog('Auto-clean completed successfully');
 });
 
-// Handle runtime messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   debugLog('New message received:', request.action, 'from:', sender.url);
 
-  if (request.action === "rewriteDescription") {
-    rewriteDescription(request)
+  if (request.action === "doRewrite") {
+    doRewrite(request.tabId, request.tab)
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ error: error.message }));
 
     return true;
   }
 });
+
+// Main logic (called from both the popup and auto-clean process).
+// 1. Retrieves the description element;
+// 2. Sends it to the backend for rewriting;
+// 3. Updates the description element with the rewritten text.
+async function doRewrite(tabId, tab) {
+  let contentResponse = await chrome.tabs.sendMessage(tabId, {
+    action: "getDescriptionForRewrite",
+    debug: settings.debugMode
+  });
+
+  if (contentResponse.error) throw new Error(`Content script error: ${contentResponse.error}`);
+
+  const rewriteResponse = await rewriteDescription({
+    text: contentResponse.text,
+    apiBackend: settings.apiBackend,
+    apiKey: settings.apiKey,
+    debug: settings.debugMode,
+    tabId: tabId,
+    url: tab.url,
+    isShortened: contentResponse.isShortened
+  });
+
+  if (rewriteResponse.error) throw new Error(`Processing error: ${rewriteResponse.error}`);
+  debugLog('Result (first 10 symbols):', rewriteResponse.rewrittenText.slice(0, 10));
+
+  contentResponse = await chrome.tabs.sendMessage(tabId, {
+    action: "changeDescriptionToRewritten",
+    newText: rewriteResponse.rewrittenText,
+    debug: settings.debugMode
+  });
+  if (contentResponse.error) throw new Error(`Content script error: ${contentResponse.error}`);
+  return {'status: ': 'success'};
+}
 
 // Unified function for text processing. Checks cache and uses the selected backend for rewriting.
 async function rewriteDescription({ text, apiBackend, apiKey, debug, tabId, url, isShortened }) {

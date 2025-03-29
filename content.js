@@ -2,6 +2,7 @@ const globalState = {
   originalDescription: '',
   originalHTML: '',
   originalElement: null,
+  isRewritten: false
 };
 
 // Finds the description element on the page. It attempts to locate the expanded description first,
@@ -10,17 +11,19 @@ function findDescriptionElement() {
   const collapsed = document.querySelector(
     '#attributed-snippet-text > .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
   );
-  if (collapsed) return {element: collapsed, isShortened: true};
+  if (collapsed) return { element: collapsed, isShortened: true };
 
   const expanded = document.querySelector(
     '#description-inline-expander yt-attributed-string.ytd-text-inline-expander.style-scope ' +
     '> .yt-core-attributed-string--white-space-pre-wrap.yt-core-attributed-string'
   );
-  if (expanded) return {element: expanded, isShortened: false};
+  if (expanded) return { element: expanded, isShortened: false };
 
-  return {element: document.querySelector("#description-inline-expander") || 
-         document.querySelector("#description.ytd-video-secondary-info-renderer") ||
-         document.querySelector("yt-formatted-string#content"), isShortened: /* unknown */ false };
+  return {
+    element: document.querySelector("#description-inline-expander") ||
+      document.querySelector("#description.ytd-video-secondary-info-renderer") ||
+      document.querySelector("yt-formatted-string#content"), isShortened: /* unknown */ false
+  };
 }
 
 // Adds a "Restore original" button next to the modified description element. This button allows
@@ -45,6 +48,7 @@ function addRestoreButton(element) {
   revertButton.querySelector('span').addEventListener('click', () => {
     element.innerHTML = globalState.originalHTML;
     revertButton.remove();
+    isRewritten = false;
   });
 
   element.parentElement.insertBefore(revertButton, element.nextSibling);
@@ -53,24 +57,30 @@ function addRestoreButton(element) {
 // Retrieves the description element and saves its original content for potential restoration.
 function getDescriptionForRewrite(sendResponse) {
   const { element, isShortened } = findDescriptionElement();
-  if (element) {
-    globalState.originalElement = element;
-    globalState.originalHTML = element.innerHTML;
-    globalState.originalDescription = element.innerText;
-    sendResponse({ text: globalState.originalDescription, html: globalState.originalHTML, isShortened });
-  } else {
-    sendResponse({ error: "Element not found" });
+  if (!element) {
+    sendResponse({ error: "Desciption element not found (getDescriptionForRewrite)" });
+    return;
   }
+  if (globalState.isRewritten && globalState.originalElement === element) {
+    sendResponse({ error: "Description already rewritten" });
+    return;
+  }
+  globalState.originalElement = element;
+  globalState.originalHTML = element.innerHTML;
+  globalState.originalDescription = element.innerText;
+  sendResponse({ text: globalState.originalDescription, html: globalState.originalHTML, isShortened });
 }
 
 // Updates the description element with new content and adds a restore button for reverting changes.
 function changeDescriptionToRewritten(request, sendResponse) {
-  const element = globalState.originalElement || findDescriptionElement().element;
-  if (element) {
-    element.innerHTML = request.newText.replace(/\n/g, '<br>');
-    addRestoreButton(element);
-    sendResponse({ success: true });
+  if (!globalState.originalElement) {
+    console.error('Desciption element not found (changeDescriptionToRewritten)');
+    return;
   }
+  globalState.isRewritten = true;
+  globalState.originalElement.innerHTML = request.newText.replace(/\n/g, '<br>');
+  addRestoreButton(globalState.originalElement);
+  sendResponse({ success: true });
 }
 
 // Listens for messages from the extension's background script or popup. Handles actions to either
@@ -80,8 +90,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === "getDescriptionForRewrite") {
     getDescriptionForRewrite(sendResponse);
-  } 
-  else if (request.action === "changeDescriptionToRewritten") {
+  } else if (request.action === "changeDescriptionToRewritten") {
     changeDescriptionToRewritten(request, sendResponse);
+  } else {
+    console.error('Unknown action:', request.action);
   }
 });
