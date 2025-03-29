@@ -17,6 +17,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiKeyInput.value = apiKeys.get(selectedBackend) || '';
     document.getElementById('apiKeyGroup').style.display =
       selectedBackend === 'simple' ? 'none' : 'block';
+      saveSettings();
+  });
+  apiKeyInput.addEventListener('input', function (event) {
+    const selectedBackend = apiBackendSelect.value;
+    apiKeys.set(selectedBackend, this.value); // Update the Map when the API key input changes
   });
   document.getElementById('apiKeyGroup').style.display =
     apiBackendSelect.value === 'simple' ? 'none' : 'block';
@@ -41,7 +46,7 @@ const saveSettings = async () => {
 };
 
 // Attach event listeners to save settings whenever the user modifies any of the input fields
-document.getElementById('apiBackend').addEventListener('change', saveSettings);
+// DO NOT save settings on apiBackend until apiKey is loaded, the must go in pair
 document.getElementById('apiKey').addEventListener('input', saveSettings);
 document.getElementById('debugToggle').addEventListener('change', saveSettings);
 document.getElementById('autoClean').addEventListener('change', saveSettings);
