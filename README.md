@@ -1,8 +1,13 @@
 # YouTube Description Cleaner Extension
-
 A browser extension that removes sponsorships and unrelated links from YouTube video descriptions with multiple AI backend support.
 
+### Screenshots
+
+#### Extension in Action
 ![Screenshot of the extension in action](screenshot1280_800.png)
+
+#### Before and After Comparison
+![Before and after comparison of a cleaned YouTube description](before_after.png)
 
 ## Features
 
@@ -18,14 +23,18 @@ A browser extension that removes sponsorships and unrelated links from YouTube v
 
 ## Installation
 
+### From Chrome Web Store
+
+The extension is currently pending review and will hopefully be available soon.
+
 ### From sources
 
-1. Download the extension files
-2. In Chromium-based browser:
-   - Go to `chrome://extensions/`
-   - Enable "Developer mode"
-   - Click "Load unpacked"
-   - Select the extension folder
+1. Download the extension files.
+2. In a Chromium-based browser:
+  - Go to `chrome://extensions/`.
+  - Enable "Developer mode".
+  - Click "Load unpacked".
+  - Select the extension folder.
 
 ## Configuration
 
