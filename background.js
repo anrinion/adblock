@@ -129,7 +129,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   debugLog('Starting auto-clean process for tab:', tabId);
 
   try {
-    await doRewrite(tab);
+    await chrome.tabs.sendMessage(tabId, {
+      action: "processPageReload",
+      debug: settings.debugMode
+    });
   } catch (error) {
     debugLog('Auto-clean failed:', error.message);
     return;

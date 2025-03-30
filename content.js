@@ -2,7 +2,6 @@ const globalState = {
   originalDescription: '',
   originalHTML: '',
   originalElement: null,
-  isRewritten: false,
   debugMode: true
 };
 
@@ -13,8 +12,27 @@ function debugLog(...args) {
   }
 }
 
-// Finds the description element on the page. It attempts to locate the expanded description first,
-// then the collapsed version, and finally falls back to other potential description containers.
+// Load user settings from Chrome's synchronized storage
+async function loadSettings() {
+  return new Promise(resolve => {
+    chrome.storage.sync.get({
+      autoClean: false,
+      debugMode: false
+    }, (result) => {
+      globalState.debugMode = result.debugMode || false;
+      globalState.autoClean = result.autoClean || false;
+      resolve();
+    });
+  });
+}
+
+// Updates the description element with a "Loading..." message during the rewrite process
+function setLoadingState(element) {
+  element.dataset.beingRewritten = "true"; // Add metadata to the DOM element
+  element.innerHTML = `<span style="color: gray; font-style: italic;">Loading...</span>`;
+}
+
+// Finds the description element on the page
 function findDescriptionElement() {
   debugLog('Attempting to find description element...');
 
@@ -43,8 +61,7 @@ function findDescriptionElement() {
   return { element, isShortened };
 }
 
-// Adds a "Restore original" button next to the modified description element. This button allows
-// users to revert the description back to its original state. If a button already exists, it is removed first.
+// Adds a "Restore original" button next to the modified description element
 function addRestoreButton(element) {
   const oldButton = element.parentElement.querySelector('.restore-button');
   if (oldButton) oldButton.remove();
@@ -61,48 +78,52 @@ function addRestoreButton(element) {
     </span>
   `;
 
-  // Adds a click event listener to restore the original description and remove the button afterward.
   revertButton.querySelector('span').addEventListener('click', () => {
     element.innerHTML = globalState.originalHTML;
     revertButton.remove();
-    globalState.isRewritten = false;
+    delete element.dataset.rewritten;
   });
 
   element.parentElement.insertBefore(revertButton, element.nextSibling);
 }
 
-// Retrieves the description element and saves its original content for potential restoration.
+// Retrieves the description element and saves its original content for potential restoration
 function getDescriptionForRewrite(sendResponse) {
   const { element, isShortened } = findDescriptionElement();
   if (!element) {
     sendResponse({ error: "Desciption element not found (getDescriptionForRewrite)" });
     return;
   }
-  if (globalState.isRewritten && globalState.originalElement === element) {
+  if (element.dataset.rewritten === "true") {
     sendResponse({ error: "Description already rewritten" });
+    return;
+  }
+  if (element.dataset.beingRewritten === "true") {
+    sendResponse({ error: "Description is currently being rewritten" });
     return;
   }
   globalState.originalElement = element;
   globalState.originalHTML = element.innerHTML;
   globalState.originalDescription = element.innerText;
+  setLoadingState(element);
   sendResponse({ text: globalState.originalDescription, html: globalState.originalHTML, isShortened });
 }
 
-// Updates the description element with new content and adds a restore button for reverting changes.
+// Updates the description element with new content and adds a restore button for reverting changes
 function changeDescriptionToRewritten(request, sendResponse) {
   if (!globalState.originalElement) {
     debugLog('Desciption element not found (changeDescriptionToRewritten)');
     return;
   }
-  globalState.isRewritten = true;
+  globalState.originalElement.dataset.beingRewritten = "false"; 
+  globalState.originalElement.dataset.rewritten = "true";
   globalState.originalElement.innerHTML = request.newHtml;
   addRestoreButton(globalState.originalElement);
   sendResponse({ success: true });
 }
 
-// Listens for messages from the extension's background script or popup. Handles actions to either
-// retrieve the current description or update it with new content.
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+// Listens for messages from the extension's background script or popup
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.debug !== undefined) {
     globalState.debugMode = request.debug; // Update debugMode based on the request
   }
@@ -113,71 +134,106 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     getDescriptionForRewrite(sendResponse);
   } else if (request.action === "changeDescriptionToRewritten") {
     changeDescriptionToRewritten(request, sendResponse);
+  } else if (request.action === "processPageReload") {
+    await onNewVideo();
+    sendResponse({ success: true });
   } else {
     debugLog('Unknown action:', request.action);
   }
 });
 
-// Observe and intercept clicks on the "...more" button
-function interceptMoreButton() {
-  if (!globalState.autoClean) {
-    debugLog('Auto-clean is disabled. Skipping the "...more" button interception.');
-    return;
+async function onNewVideo() {
+  async function handleMoreButtonClick() {
+    debugLog('"...more" button clicked or simulated. Cleaning extended description...');
+    setTimeout(() => {
+      // Trigger cleaning after the extended description is loaded
+      (async () => {
+        try {
+          const response = await chrome.runtime.sendMessage({
+            action: "doRewrite",
+          });
+          if (response.error) {
+            debugLog('Error cleaning extended description:', response.error);
+          } else {
+            debugLog('Background script processed the rewrite successfully.');
+          }
+        } catch (error) {
+          debugLog('Error communicating with background script:', error);
+        }
+      })();
+    }, 10); // Delay to allow the extended description to load
   }
-  const observer = new MutationObserver(() => {
-    const moreButton = document.querySelector('tp-yt-paper-button#expand');
-    if (moreButton) {
-      if (!moreButton.dataset.listenerAdded) {
-        moreButton.addEventListener('click', async () => {
-          debugLog('"...more" button clicked. Cleaning extended description...');
-          setTimeout(() => {
-            // Trigger cleaning after the extended description is loaded
-            (async () => {
-              try {
-                const response = await chrome.runtime.sendMessage({
-                  action: "doRewrite",
-                });
-                if (response.error) {
-                  debugLog('Error cleaning extended description:', response.error);
-                } else {
-                  debugLog('Background script processed the rewrite successfully.');
-                }
-              } catch (error) {
-                debugLog('Error communicating with background script:', error);
-              }
-            })();
-          }, 10); // Delay to allow the extended description to load
-        });
-        moreButton.dataset.listenerAdded = "true"; // Mark the button to prevent duplicate listeners
+
+  async function clickMoreButtonIfNeeded() {
+    if (!globalState.autoClean) {
+      debugLog('Auto-clean is disabled. Skipping auto-click of "...more" button.');
+      return;
+    }
+
+    const maxAttempts = 5;
+    const delayBetweenAttempts = 300; // ms
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const moreButton = document.querySelector('tp-yt-paper-button#expand');
+      if (moreButton) {
+        debugLog('Found new "...more" button. Clicking it...');
+
+        // Add the click handler first (in case our click triggers it)
+        if (!moreButton.dataset.listenerAdded) {
+          moreButton.addEventListener('click', handleMoreButtonClick);
+          moreButton.dataset.listenerAdded = "true";
+        }
+
+        moreButton.click();
+        return true;
+      }
+
+      if (attempt < maxAttempts) {
+        debugLog(`"...more" button not found (attempt ${attempt}/${maxAttempts}), retrying...`);
+        await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
       }
     }
-  });
 
-  // Observe changes in the DOM to detect when the "...more" button is added
-  debugLog('The "...more" button interception started.');
-  observer.observe(document.body, { childList: true, subtree: true });
-}
+    debugLog('"...more" button not found after maximum attempts.');
+    return false;
+  }
 
-// Load user settings from Chrome's synchronized storage
-async function loadSettings() {
-  return new Promise(resolve => {
-    chrome.storage.sync.get({
-      autoClean: false,
-      debugMode: false
-    }, (result) => {
-      globalState.debugMode = result.debugMode || false;
-      globalState.autoClean = result.autoClean || false;
-      resolve();
+  // Observe and intercept clicks on the "...more" button
+  function interceptMoreButton() {
+    if (!globalState.autoClean) {
+      debugLog('Auto-clean is disabled. Skipping the "...more" button interception.');
+      return;
+    }
+
+    const observer = new MutationObserver(() => {
+      const moreButton = document.querySelector('tp-yt-paper-button#expand');
+      if (moreButton && !moreButton.dataset.listenerAdded) {
+        moreButton.addEventListener('click', handleMoreButtonClick);
+        moreButton.dataset.listenerAdded = "true";
+        debugLog('Added click listener to "...more" button');
+      }
     });
-  });
+
+    debugLog('The "...more" button interception started.');
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // Initialization
+  try {
+      // Try to auto-click first
+      const clicked = await clickMoreButtonIfNeeded();
+      if (!clicked) {
+        // Set up observer as fallback in case button appears later
+        interceptMoreButton();
+      }
+  } catch (error) {
+    debugLog('An error occurred during script initialization:', error);
+  }
 }
 
-// Initialization
-try {
-  loadSettings().then(() => {
-    debugLog('Settings loaded:', globalState);
-    interceptMoreButton();
-  });
+// Initialize the script when the page loads
+ try {
+  loadSettings().then(onNewVideo);
 } catch (error) {
   debugLog('An error occurred during script initialization:', error);
 }
