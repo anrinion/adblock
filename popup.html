@@ -67,12 +67,18 @@
         <option value="simple">Simple (first paragraph only)</option>
         <option value="gemini">Google Gemini (AI)</option>
         <option value="chatgpt">OpenAI ChatGPT (AI)</option>
+        <option value="ollama">Ollama (AI, locally)</option>
       </select>
     </div>
 
     <div class="form-group" id="apiKeyGroup">
-      <label for="apiKey">API Key (for AI modes):</label>
-      <input type="password" id="apiKey" placeholder="Enter API key for AI modes">
+      <label for="apiKey">API Key (for cloud AI modes):</label>
+      <input type="password" id="apiKey" placeholder="Enter API key for cloud AI modes">
+    </div>
+
+    <div class="form-group" id="ollamaSettings">
+      <input id="url" placeholder="http://localhost:11434">
+      <input id="model" placeholder="tinyllama">
     </div>
 
     <div class="debug-toggle">

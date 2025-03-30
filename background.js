@@ -5,7 +5,9 @@ let settings = {
   autoClean: false,
   apiBackend: 'simple',
   apiKeys: {}, // Map of backend names to API keys
-  debugMode: false
+  debugMode: false,
+  ollamaUrl: 'http://localhost:11434', // Default Ollama URL
+  ollamaModel: 'tinyllama' // Default Ollama model
 };
 
 // Debug logger function
@@ -22,7 +24,9 @@ async function loadSettings() {
       autoClean: false,
       apiBackend: 'simple',
       apiKeys: {}, // Default to an empty object
-      debugMode: false
+      debugMode: false,
+      ollamaUrl: 'http://localhost:11434', // Default Ollama URL
+      ollamaModel: 'tinyllama' // Default Ollama model
     }, (result) => {
       settings = result;
       debugLog('Settings loaded:', JSON.stringify(settings, null, 2));
@@ -212,12 +216,17 @@ async function rewriteDescription({ text, html, apiBackend, apiKey, debug, tabId
         if (!key) throw new Error('Missing ChatGPT API key');
         result = await rewriteWithChatGPT(html, key, debug);
         break;
+      case 'ollama':
+        const ollamaUrl = settings.ollamaUrl || 'http://localhost:11434';
+        const ollamaModel = settings.ollamaModel || 'tinyllama';
+        result = await rewriteWithOllama(html, ollamaUrl, ollamaModel, debug);
+        break;
       default:
         throw new Error(`Unknown backend: ${backend}`);
     }
 
     // Cache the result
-    cacheRequestData(tabId, url, isShortened, text, result);
+    cacheRequestData(tabId, url, isShortened, result);
 
     return { newHtml: result };
   } catch (error) {
@@ -329,6 +338,42 @@ async function rewriteWithChatGPT(html, apiKey, debug) {
     }
 
     return data.choices[0].message.content;
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function rewriteWithOllama(html, url, model, debug) {
+  try {
+    debugLog('Ollama URL:', url);
+    debugLog('Ollama Model:', model);
+
+    const prompt = `${AI_REQUEST}${sanitizeHtml(html)}`;
+    debugLog('Ollama API prompt:', prompt);
+
+    const response = await fetch(`${url}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model,
+        prompt: prompt,
+        stream: false
+      }),
+    });
+
+    debugLog('Ollama API responed: ', response);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Ollama API error: ${errorData.error || response.statusText}`);
+    }
+    const data = await response.json();
+    debugLog('Final result: ', data);
+    if (!data.response) {
+      throw new Error('Invalid response structure from Ollama');
+    }
+
+    return data.response;
   } catch (error) {
     throw error;
   }
