@@ -2,6 +2,8 @@
 
 A browser extension that removes sponsorships and unrelated links from YouTube video descriptions with multiple AI backend support.
 
+![Screenshot of the extension in action](screenshot1280_800.png)
+
 ## Features
 
 - Removes sponsor segments and promotional links
