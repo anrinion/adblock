@@ -3,7 +3,7 @@
     "name": "YouTube Description Rewriter",
     "version": "0.0.1",
     "description": "Removes sponsors and unrelated links from YouTube descriptions",
-    "permissions": ["tabs", "activeTab", "storage"],
+    "permissions": ["tabs", "storage"],
     "host_permissions": [
       "https://*.youtube.com/*"
     ],
