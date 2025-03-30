@@ -1,4 +1,4 @@
-const AI_REQUEST = 'Remove sponsors and irrelevant links (like contacts and references), but keep the core content and timestamps links:\n\n';
+const AI_REQUEST = 'Remove sponsors, promo, hashtags and irrelevant links (like contacts and references), but keep the core content and timestamps links:\n\n';
 
 // Configuration object to store user settings
 let settings = {
@@ -177,7 +177,7 @@ async function doRewrite(tab) {
     debug: settings.debugMode
   });
   if (contentResponse.error) throw new Error(`Content script error: ${contentResponse.error}`);
-  return {'status: ': 'success'};
+  return { 'status: ': 'success' };
 }
 
 // Unified function for text processing. Checks cache and uses the selected backend for rewriting.
@@ -234,40 +234,31 @@ function simpleRewrite(text, debug) {
 
 // API is expensive... so we send to LLMs only the minumum required data. It's mostly useless anyway.
 function sanitizeHtml(html) {
-  // First remove all forbidden elements (script, style, etc.)
-  html = html.replace(/<\/?(script|style|iframe|frameset|frame|object|embed|applet)[^>]*>/gi, '');
+  // First extract and protect all <a> tags with placeholders
+  const linkMap = new Map();
+  let linkCounter = 0;
 
-  // Allow only these tags (others will be stripped, keeping content)
-  const allowedTags = [
-    'p', 'br', 'hr',
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'ul', 'ol', 'li',
-    'strong', 'b', 'em', 'i', 'u', 's', 'code',
-    'a'
-  ];
-
-  // 1. Remove all forbidden tags (but keep their content)
-  allowedTags.forEach(tag => {
-    const regex = new RegExp(`<\/?(?!${tag})[^>]+>`, 'gi');
-    html = html.replace(regex, '');
+  // Protect all <a> tags (with all their attributes)
+  html = html.replace(/<a\s([^>]*)>([^<]*)<\/a>/gi, (match, attrs, content) => {
+    const placeholder = `~~~LINK_${linkCounter++}~~~`;
+    linkMap.set(placeholder, `<a ${attrs}>${content}</a>`);
+    return placeholder;
   });
 
-  // 2. For allowed tags, remove all attributes except:
-  //    - Keep ALL attributes for <a> tags
-  //    - Remove ALL attributes for other tags
-  html = html.replace(/<(?!\/?a\b)([a-z][a-z0-9]*)([^>]*)>/gi, function(match, tagName, attrs) {
-    return allowedTags.includes(tagName.toLowerCase()) ? `<${tagName}>` : '';
+  // Now remove all other HTML tags (keeping their content)
+  html = html.replace(/<\/?([a-z][a-z0-9]*)(?:[^>]*)>/gi, (match, tag) => {
+    // Keep only these basic tags (without attributes)
+    const basicTags = ['p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'u', 's', 'code'];
+    return basicTags.includes(tag.toLowerCase()) ? match.replace(/<([a-z]+)([^>]*)>/i, '<$1>') : '';
   });
 
-  // Special handling for <a> tags - preserve all attributes
-  html = html.replace(/<a\s([^>]*)>/gi, function(match, attrs) {
-    // Basic XSS protection for href attributes
-    const cleanAttrs = attrs.replace(/\bhref\s*=\s*["']?javascript:[^"'\s>]*/gi, '');
-    return `<a ${cleanAttrs.trim()}>`;
+  // Restore all protected links
+  linkMap.forEach((link, placeholder) => {
+    html = html.replace(placeholder, link);
   });
 
-  // Remove empty tags (except <br> and <hr>)
-  html = html.replace(/<(?!br|hr|img)\w[^>]*>\s*<\/\w+>/g, '');
+  // Clean up any empty tags
+  html = html.replace(/<[^>]+>\s*<\/[^>]+>/g, '');
 
   return html;
 }
