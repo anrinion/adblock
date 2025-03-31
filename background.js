@@ -1,4 +1,6 @@
-const AI_REQUEST = 'Remove sponsors, promo, hashtags and irrelevant links (like contacts and references), but keep the core content and timestamps links:\n\n';
+const AI_REQUEST = "Rewrite the valid HTML input by removing sponsors, promotions, hashtags, and irrelevant links " +
+  "(e.g., contacts, references). Keep core content and ensure timestamp links remain intact. " +
+  "Output only the rewritten content without any introductory text or enclosing backticks:\n\n";
 
 // Configuration object to store user settings
 let settings = {
@@ -219,6 +221,10 @@ async function rewriteDescription({ text, html, apiBackend, apiKey, debug, tabId
         if (!key) throw new Error('Missing ChatGPT API key');
         result = await rewriteWithChatGPT(html, key, debug);
         break;
+      case 'mistral':
+        if (!key) throw new Error('Missing Mistral API key');
+        result = await rewriteWithMistral(html, key, debug);
+        break;
       case 'ollama':
         const ollamaUrl = settings.ollamaUrl || 'http://localhost:11434';
         const ollamaModel = settings.ollamaModel || 'tinyllama';
@@ -338,6 +344,45 @@ async function rewriteWithChatGPT(html, apiKey, debug) {
     const data = await response.json();
     if (!data.choices?.[0]?.message?.content) {
       throw new Error('Invalid response structure from ChatGPT');
+    }
+
+    return data.choices[0].message.content;
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Rewrite text using the Mistral AI API
+async function rewriteWithMistral(html, apiKey, debug) {
+  try {
+    debugLog('Mistral API key:', apiKey);
+
+    const prompt = `${AI_REQUEST}${sanitizeHtml(html)}`;
+    debugLog('Mistral API prompt:', prompt);
+
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'mistral-small-latest',
+        messages: [
+          { role: 'user', content: prompt }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`API error: ${errorData.error || response.statusText}`);
+    }
+
+    const data = await response.json();
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response structure from Mistral');
     }
 
     return data.choices[0].message.content;

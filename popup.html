@@ -64,16 +64,17 @@
     <div class="form-group">
       <label for="apiBackend">Processing Mode:</label>
       <select id="apiBackend">
-        <option value="simple">Simple (first paragraph only)</option>
-        <option value="gemini">Google Gemini (AI)</option>
-        <option value="chatgpt">OpenAI ChatGPT (AI)</option>
-        <option value="ollama">Ollama (AI, locally)</option>
+        <option value="simple">Simple (manual, local)</option>
+        <option value="gemini">Google Gemini (AI, remote)</option>
+        <option value="chatgpt">OpenAI ChatGPT (AI, remote)</option>
+        <option value="mistral">Mistral AI (AI, remote) </option>
+        <option value="ollama">Ollama (AI, local)</option>
       </select>
     </div>
 
     <div class="form-group" id="apiKeyGroup">
-      <label for="apiKey">API Key (for cloud AI modes):</label>
-      <input type="password" id="apiKey" placeholder="Enter API key for cloud AI modes">
+      <label for="apiKey">API Key (for remote AI modes):</label>
+      <input type="password" id="apiKey" placeholder="Enter API key for remote AI modes">
     </div>
 
     <div class="form-group" id="ollamaSettings">
