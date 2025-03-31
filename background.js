@@ -1,6 +1,13 @@
-const AI_REQUEST = "Rewrite the valid HTML input by removing sponsors, promotions, hashtags, and irrelevant links " +
-  "(e.g., contacts, references). Keep core content and ensure timestamp links remain intact. " +
-  "Output only the rewritten content without any introductory text or enclosing backticks:\n\n";
+const AI_REQUEST =
+  "Rewrite the valid HTML input by leaving only the description of the main " +
+  "video and its timestamps. Remove all other content, additional videos, " +
+  "references, ads, sponsors, promotions, hashtags, and any other " +
+  "non-essential content. REMOVE ADS! Use keywords like 'ad', 'sponsor', " +
+  "'promotion', 'offer', 'discount', or similar to identify ads. If content " +
+  "is unrelated to the main topic, remove it. Ensure the output contains only " +
+  "the core description of the main video, preserving meaningful information. " +
+  "Output only the rewritten content as a valid HTML without any introductory " +
+  "text or enclosing backticks:\n\n";
 
 // Configuration object to store user settings
 let settings = {
@@ -276,6 +283,11 @@ function sanitizeHtml(html) {
 
   return html;
 }
+// Function to clean up markdown tags from AI-generated HTML
+function cleanMarkdownTags(html) {
+  // Remove markdown-style backticks wrapping the content
+  return html.replace(/^```(?:html)?\n([\s\S]*?)\n```$/gm, '$1').trim();
+}
 
 // Rewrite text using the Gemini API
 async function rewriteWithGemini(html, apiKey, debug) {
@@ -301,7 +313,7 @@ async function rewriteWithGemini(html, apiKey, debug) {
       throw new Error('Invalid response structure from Gemini');
     }
 
-    return data.candidates[0].content.parts[0].text;
+    return cleanMarkdownTags(data.candidates[0].content.parts[0].text);
   } catch (error) {
     throw error;
   }
@@ -340,7 +352,7 @@ async function rewriteWithMistral(html, apiKey, debug) {
       throw new Error('Invalid response structure from Mistral');
     }
 
-    return data.choices[0].message.content;
+    return cleanMarkdownTags(data.choices[0].message.content);
   } catch (error) {
     throw error;
   }
@@ -364,7 +376,7 @@ async function rewriteWithOllama(html, url, model, debug) {
       }),
     });
 
-    debugLog('Ollama API responed: ', response);
+    debugLog('Ollama API responded: ', response);
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -376,7 +388,7 @@ async function rewriteWithOllama(html, url, model, debug) {
       throw new Error('Invalid response structure from Ollama');
     }
 
-    return data.response;
+    return cleanMarkdownTags(data.response);
   } catch (error) {
     throw error;
   }
