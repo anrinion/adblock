@@ -4,10 +4,10 @@ A browser extension that removes sponsorships and unrelated links from YouTube v
 ### Screenshots
 
 #### Extension in Action
-![Screenshot of the extension in action](screenshot1280_800.png)
+![Screenshot of the extension in action](screenshots/screenshot1280_800.png)
 
 #### Before and After Comparison
-![Before and after comparison of a cleaned YouTube description](before_after.png)
+![Before and after comparison of a cleaned YouTube description](screenshots/before_after.png)
 
 ## Features
 
@@ -32,9 +32,9 @@ The extension is now available on the Chrome Web Store! [Install it here](https:
 1. Download the extension files.
 2. In a Chromium-based browser:
   - Go to `chrome://extensions/`.
-  - Enable "Developer mode".
-  - Click "Load unpacked".
-  - Select the extension folder.
+    - Enable "Developer mode".
+    - Click "Load unpacked".
+    - Select the `/src/` folder.
 
 ## Configuration
 

@@ -1,0 +1,31 @@
+{
+  "name": "adblock",
+  "version": "0.0.2",
+  "description": "A browser extension that removes sponsorships and unrelated links from YouTube video descriptions with multiple AI backend support.",
+  "main": "background.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "watch": "webpack --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anrinion/adblock.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/anrinion/adblock/issues"
+  },
+  "homepage": "https://github.com/anrinion/adblock#readme",
+  "devDependencies": {
+    "@babel/core": "^7.26.10",
+    "@babel/preset-env": "^7.26.9",
+    "babel-loader": "^10.0.0",
+    "copy-webpack-plugin": "^13.0.0",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1",
+    "zip-webpack-plugin": "^4.0.3"
+  }
+}
