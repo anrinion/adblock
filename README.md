@@ -45,12 +45,12 @@ Configure these options in the popup:
 - For AI modes, ensure valid API keys
 - Refresh page after changing settings
 
-### Screenshots
+## Screenshots
 
-#### Extension in Action
+### Extension in Action
 ![Screenshot of the extension in action](screenshots/screenshot1280_800.png)
 
-#### Before and After Comparison
+### Before and After Comparison
 ![Before and after comparison of a cleaned YouTube description](screenshots/before_after.png)
 
 ## Version History
