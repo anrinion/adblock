@@ -1,26 +1,6 @@
 # YouTube Description Cleaner Extension
 A browser extension that removes sponsorships and unrelated links from YouTube video descriptions with multiple AI backend support.
 
-### Screenshots
-
-#### Extension in Action
-![Screenshot of the extension in action](screenshots/screenshot1280_800.png)
-
-#### Before and After Comparison
-![Before and after comparison of a cleaned YouTube description](screenshots/before_after.png)
-
-## Features
-
-- Removes sponsor segments and promotional links
-- Multiple processing modes:
-  - Simple (first paragraph only)
-  - Google Gemini (AI)
-  - Mistral AI (AI)
-  - Ollama (local AI models)
-- Auto-clean on page load
-- One-click original description restore
-- Debug mode for developers
-
 ## Installation
 
 ### From Chrome Web Store
@@ -59,21 +39,29 @@ Configure these options in the popup:
 | Mistral AI | Yes              | French AI (free tier available)      |
 | Ollama     | No               | Run local AI models                  |
 
-## How It Works
-
-1. Detects YouTube video pages
-2. Processes visible description text
-3. Auto-clicks the "Show more" button to expand the description
-4. Processes the full expanded description
-5. Adds "Restore original" option
-
 ## Troubleshooting
 
 - Enable debug mode to see console logs
 - For AI modes, ensure valid API keys
 - Refresh page after changing settings
 
+### Screenshots
+
+#### Extension in Action
+![Screenshot of the extension in action](screenshots/screenshot1280_800.png)
+
+#### Before and After Comparison
+![Before and after comparison of a cleaned YouTube description](screenshots/before_after.png)
+
 ## Version History
+
+**0.0.2** - Apr 2, 2025
+- Start using webpack
+- New icons
+- Updated README, add links to API keys
+- Removed ChatGPT API option (no free tier)
+- Added Mistral AI
+- Improved prompt (much better for stupid models)
 
 **0.0.1** - Initial release
 - Basic description cleaning
