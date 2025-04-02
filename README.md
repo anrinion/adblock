@@ -15,7 +15,7 @@ A browser extension that removes sponsorships and unrelated links from YouTube v
 - Multiple processing modes:
   - Simple (first paragraph only)
   - Google Gemini (AI)
-  - OpenAI ChatGPT (AI)
+  - Mistral AI (AI)
   - Ollama (local AI models)
 - Auto-clean on page load
 - One-click original description restore
@@ -25,7 +25,7 @@ A browser extension that removes sponsorships and unrelated links from YouTube v
 
 ### From Chrome Web Store
 
-The extension is currently pending review and will hopefully be available soon.
+The extension is now available on the Chrome Web Store! [Install it here](https://chromewebstore.google.com/detail/youtube-description-rewri/bkifbmkpjodnagcldhlonpegnfolnlin).
 
 ### From sources
 
@@ -42,7 +42,11 @@ Configure these options in the popup:
 
 - **Processing Mode**: Select text processing method
 - **API Key**: Required for cloud AI services
+  - [Get your Gemini API key here](https://aistudio.google.com/app/apikey)
+- **Mistral AI**: Configure Mistral backend
+  - [Get started with Mistral AI here](https://docs.mistral.ai/getting-started/quickstart/)
 - **Ollama Settings**: URL and model for local Ollama
+  - [Learn how to install Ollama](https://ollama.ai)
 - **Debug Mode**: Enable for troubleshooting
 - **Auto Clean**: Process descriptions automatically
 
@@ -52,15 +56,15 @@ Configure these options in the popup:
 |------------|------------------|--------------------------------------|
 | Simple     | No               | Keeps first paragraph only           |
 | Gemini     | Yes              | Google's AI (free tier available)    |
-| ChatGPT    | Yes              | OpenAI's model                       |
+| Mistral AI | Yes              | French AI (free tier available)      |
 | Ollama     | No               | Run local AI models                  |
 
 ## How It Works
 
 1. Detects YouTube video pages
 2. Processes visible description text
-3. Replaces "Show more" button with custom handler
-4. When expanded, processes full description
+3. Auto-clicks the "Show more" button to expand the description
+4. Processes the full expanded description
 5. Adds "Restore original" option
 
 ## Troubleshooting
