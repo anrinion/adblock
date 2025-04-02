@@ -28,7 +28,7 @@ jobs:
         npx webpack
 
     - name: Upload extension ZIP
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: chrome-extension.zip
         path: chrome-extension.zip
