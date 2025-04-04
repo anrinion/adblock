@@ -30,5 +30,7 @@ jobs:
     - name: Upload extension ZIP
       uses: actions/upload-artifact@v4
       with:
-        name: chrome-extension.zip
-        path: dist/chrome-extension.zip
+        name: chrome-extension
+        path: |
+          dist/**/*
+          !dist/chrome-extension.zip
